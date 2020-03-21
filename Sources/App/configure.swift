@@ -44,17 +44,15 @@ public final class OTRNServer {
 
     func configure(router: Router, services: inout Services) {
 
-        let websocket = NIOWebSocketServer.websocketOTRN
-        services.register(websocket.server, as: WebSocketServer.self)
+        services.register(server, as: WebSocketServer.self)
 
-        let blockchain = Blockchain(Block(data: ""))
+//        let blockchain = Blockchain(Block(data: ""))
 
         struct Empty: Content { }
 
         struct OTRNConvoySession: Content {
             let id: String
         }
-
 
         router.get { _ in
             "OTRN Server is running"
@@ -96,13 +94,13 @@ public final class OTRNServer {
 
         addSession(Session(id:"test"))
 
-        router.post("data") { req in
-            blockchain.blocks.map { $0.key }.asJSON ?? ""
-        }
-
-        self.onWriteData = { block in
-            blockchain.addBlock(block)
-        }
+//        router.post("data") { req in
+//            blockchain.blocks.map { $0.key }.asJSON ?? ""
+//        }
+//
+//        self.onWriteData = { block in
+//            blockchain.addBlock(block)
+//        }
     }
 
     func addSession(_ session: Session) {
@@ -405,16 +403,6 @@ extension Date {
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter.string(from: self)
     }
-}
-
-extension Services {
-    mutating func registerWebsocketBasedProtocol() {
-        register(NIOWebSocketServer.websocketOTRN.server, as: WebSocketServer.self)
-    }
-}
-
-extension NIOWebSocketServer {
-    static var websocketOTRN: OTRNServer { OTRNServer() }
 }
 
 extension Encodable {
