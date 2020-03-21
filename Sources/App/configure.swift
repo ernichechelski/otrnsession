@@ -58,6 +58,10 @@ public final class OTRNServer {
             "OTRN Server is running"
         }
 
+        router.get("info") { req -> String in
+            self.sessions.map { $0.sockets.map { $0.value.1 } }.asJSON ?? "Cannot map info"
+        }
+
         /// Create random session
         router.post("session") { req -> String in
             let session = Session()
