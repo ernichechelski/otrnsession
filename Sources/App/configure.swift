@@ -46,7 +46,7 @@ public final class OTRNServer {
 
         services.register(server, as: WebSocketServer.self)
 
-//        let blockchain = Blockchain(Block(data: ""))
+        let blockchain = Blockchain()
 
         struct Empty: Content { }
 
@@ -98,13 +98,14 @@ public final class OTRNServer {
 
         addSession(Session(id:"test"))
 
-//        router.post("data") { req in
-//            blockchain.blocks.map { $0.key }.asJSON ?? ""
-//        }
-//
-//        self.onWriteData = { block in
-//            blockchain.addBlock(block)
-//        }
+        router.get("get") { req in
+            blockchain.blocks.map { $0 }.asJSON ?? ""
+        }
+
+        router.get("new") { req -> String in
+            blockchain.addBlock(Block(data: "\(Date())"))
+            return ""
+        }
     }
 
     func addSession(_ session: Session) {
@@ -303,24 +304,36 @@ public class Block: Codable {
 
 public class Blockchain: Codable {
 
-    private (set) var blocks :[Block] = [Block]()
-
-    init(_ genesisBlock :Block) {
-        addBlock(genesisBlock)
+    enum CodingKeys: String, CodingKey {
+        case blocks
     }
 
+    private let mainQueue = DispatchQueue(label: "Blockchain")
+
+    private (set) var blocks: [Block] = [Block]()
+
+    init() {}
+
     func addBlock(_ block :Block) {
-        if self.blocks.isEmpty {
-            block.previousHash = "0"
-            block.hash = generateHash(for: block)
-        } else {
-            let previousBlock = getPreviousBlock()
-            block.previousHash = previousBlock.hash
-            block.index = self.blocks.count
-            block.hash = generateHash(for: block)
+        mainQueue.sync {
+            if self.blocks.isEmpty {
+                block.previousHash = "0"
+                block.hash = generateHash(for: block)
+            } else {
+                let previousBlock = getPreviousBlock()
+                block.previousHash = previousBlock.hash
+                block.index = self.blocks.count
+                block.hash = generateHash(for: block)
+            }
+            self.blocks.append(block)
+            displayBlock(block)
         }
-        self.blocks.append(block)
-        displayBlock(block)
+    }
+
+    func validate() -> Bool {
+        mainQueue.sync {
+            checkAll() && recalc()
+        }
     }
 
     private func getPreviousBlock() -> Block {
@@ -344,16 +357,15 @@ public class Blockchain: Codable {
         return hash
     }
 
-    func check(block: Block) -> Bool {
-        let hash = block.key.sha1Hash()
-        return hash.elementsEqual(block.hash)
+    private func check(block: Block) -> Bool {
+        block.key.sha1Hash().elementsEqual(block.hash)
     }
 
-    func checkAll() -> Bool {
+    private func checkAll() -> Bool {
         blocks.map { check(block: $0) }.filter { $0 }.count == blocks.count
     }
 
-    func recalc() -> Bool {
+    private func recalc() -> Bool {
         let pairs = stride(from: 0,
                            to: blocks.endIndex,
                            by: 1)
@@ -368,35 +380,13 @@ public class Blockchain: Codable {
             .filter { $0 }.count
         return count == (blocks.count)
     }
-
-    func validate() -> Bool {
-        checkAll() && recalc()
-    }
 }
 
 
 
 extension String {
     func sha1Hash() -> String {
-
-        let task = Process()
-        task.launchPath = "/usr/bin/shasum"
-        task.arguments = []
-
-        let inputPipe = Pipe()
-
-        inputPipe.fileHandleForWriting.write(self.data(using: String.Encoding.utf8)!)
-
-        inputPipe.fileHandleForWriting.closeFile()
-
-        let outputPipe = Pipe()
-        task.standardOutput = outputPipe
-        task.standardInput = inputPipe
-        task.launch()
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let hash = String(data: data, encoding: String.Encoding.utf8)!
-        return hash.replacingOccurrences(of: "  -\n", with: "")
+        SHA1.hexString(from: self) ?? ""
     }
 }
 
